@@ -1,0 +1,51 @@
+---
+title: "Barrow climate data"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is a small analysis of Barrow daily weather summaries sourced from NOAA (https://www.ncdc.noaa.gov/cdo-web/datasets). 
+
+I was inspired to look at Barrow weather data by reading in the Washington Post about how the data there was setting off outlier detection climate models (https://www.washingtonpost.com/news/capital-weather-gang/wp/2017/12/12/barrow-is-warming-so-fast-algorithms-removed-the-data-because-it-seemed-unreal/?utm_term=.7a5b322526b4) 
+
+and reading this climate.gov article about rising average temperatures for October (https://www.climate.gov/news-features/understanding-climate/barrow-alaska-climate-change-action)
+
+```{r}
+library(ggplot2)
+library(plyr)
+library(forecast)
+library(ggmap)
+
+# read NOAA daily summary data for Barrow
+barrow <- read.csv("~/Documents/Climate-Weather/barrowAK_daily.csv", stringsAsFactors=FALSE)
+barrow = barrow[,c('STATION','NAME','LATITUDE','LONGITUDE','ELEVATION','DATE'
+                   ,'AWND','PGTM','PRCP','SNOW','TMIN','TAVG','TMAX')]
+barrow$obs_date = as.Date(barrow$DATE)
+barrow$year = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][1]})))
+barrow$month = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][2]})))
+barrow$dayofmonth = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][3]})))
+
+str(barrow)
+range(barrow$DATE)
+```
+
+This data is from the Barrow airport weather station and spans from Sept 1901 to Dec 2017. 
+
+Following the climate.gov article, let's look at monthly averages over time starting in Oct 1920:
+
+```{r}
+continuous_obs_start = as.Date('1920-10-01')
+barrow_monthlyavgs = ddply(barrow[barrow$obs_date>=continuous_obs_start,],c('year','month'),function(d){
+  data.frame(TMIN=mean(d$TMIN,na.rm=TRUE)
+             ,TMAX=mean(d$TMAX,na.rm=TRUE)
+             ,PRCP=mean(d$PRCP,na.rm=TRUE)
+             ,AWND=mean(d$AWND,na.rm=TRUE)
+             )
+})
+ggplot(barrow_monthlyavgs,aes(year,TMIN))+geom_line()+theme_bw()+facet_wrap(~month)+
+  geom_smooth(se=TRUE,color='red',span=0.2,method=loess)+
+  geom_hline(lty=2,aes(yintercept=32))
+```
+
+
