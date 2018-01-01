@@ -8,6 +8,7 @@ output:
 This is a small analysis of Barrow daily weather summaries sourced from NOAA (https://www.ncdc.noaa.gov/cdo-web/datasets). 
 
 I was inspired to look at Barrow weather data by reading in the Washington Post about how the data there was setting off outlier detection climate models (https://www.washingtonpost.com/news/capital-weather-gang/wp/2017/12/12/barrow-is-warming-so-fast-algorithms-removed-the-data-because-it-seemed-unreal/?utm_term=.7a5b322526b4) 
+
 and reading this climate.gov article about rising average temperatures for October (https://www.climate.gov/news-features/understanding-climate/barrow-alaska-climate-change-action)
 
 ```{r}
