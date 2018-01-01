@@ -21,6 +21,11 @@ library(ggmap)
 barrow <- read.csv("~/Documents/Climate-Weather/barrowAK_daily.csv", stringsAsFactors=FALSE)
 barrow = barrow[,c('STATION','NAME','LATITUDE','LONGITUDE','ELEVATION','DATE'
                    ,'AWND','PGTM','PRCP','SNOW','TMIN','TAVG','TMAX')]
+barrow$obs_date = as.Date(barrow$DATE)
+barrow$year = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][1]})))
+barrow$month = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][2]})))
+barrow$dayofmonth = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][3]})))
+
 str(barrow)
 range(barrow$DATE)
 ```
@@ -31,21 +36,9 @@ Let's look at where Barrow is on map of Alaska with the Arctic Circle (66.33 deg
 
 ```{r}
 barrow_location = barrow[1,c('LONGITUDE','LATITUDE')]
-barrow_map = get_map(location='alaska',zoom=4)
+barrow_map = get_map(location='alaska',zoom=4,color='bw')
 ggmap(barrow_map)+geom_point(data=barrow,aes(x=LONGITUDE,y=LATITUDE),shape=1,color='red',size=3)+
   geom_hline(lty=2,aes(yintercept=66.33))
-```
-
-
-There are gaps in the earlier years of the data:
-
-```{r}
-barrow$obs_date = as.Date(barrow$DATE)
-barrow$year = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][1]})))
-barrow$month = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][2]})))
-barrow$dayofmonth = as.numeric(unlist(lapply(barrow$DATE,FUN=function(s){strsplit(s,split='-')[[1]][3]})))
-
-ggplot(barrow,aes(obs_date,TMAX))+geom_point(size=0.1)+theme_bw()
 ```
 
 From October 1920 on is available without any major gaps in the data.
@@ -83,10 +76,4 @@ ggplot(subset(barrow_monthlyavgs,month==10),aes(year,TMIN))+geom_line()+theme_bw
   geom_hline(lty=2,aes(yintercept=32))
 ```
 
-Below is some statistical testing on the lows since 2002 showing that this increase is significant, though less pronounced in the summer months than in the fall-winter.
-
-```{r}
-summary(aov(TMIN~I(year>2001)*factor(month),data=barrow))
-summary(lm(TMIN~I(year>2001)*factor(month),data=barrow))
-```
 
