@@ -132,7 +132,7 @@ library(forecast)
 library(ggmap)
 
 # read NOAA daily summary data for Barrow
-barrow &lt;- read.csv(&quot;~/Documents/weather:climate data/barrowAK_daily.csv&quot;, stringsAsFactors=FALSE)
+barrow &lt;- read.csv(&quot;~/Documents/Climate-Weather/barrowAK_daily.csv&quot;, stringsAsFactors=FALSE)
 barrow = barrow[,c('STATION','NAME','LATITUDE','LONGITUDE','ELEVATION','DATE'
                    ,'AWND','PGTM','PRCP','SNOW','TMIN','TAVG','TMAX')]
 str(barrow)</code></pre>
