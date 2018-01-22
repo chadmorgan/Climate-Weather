@@ -57,7 +57,7 @@ ggplot(subset(barrow,DATE<'1905-01-01'|DATE>'2015-01-01'),aes(obs_date,TMAX))+ge
 
 Following the climate.gov article, let's look at monthly averages over time starting in Oct 1920:
 
-```{r}
+```{r fig4, fig.height = 10, fig.width = 12}
 continuous_obs_start = as.Date('1920-10-01')
 barrow_monthlyavgs = ddply(barrow[barrow$obs_date>=continuous_obs_start,],c('year','month'),function(d){
   data.frame(TMIN=mean(d$TMIN,na.rm=TRUE)
@@ -67,7 +67,7 @@ barrow_monthlyavgs = ddply(barrow[barrow$obs_date>=continuous_obs_start,],c('yea
              )
 })
 ggplot(barrow_monthlyavgs,aes(year,TMIN))+geom_line()+theme_bw()+facet_wrap(~month)+
-  geom_smooth(se=TRUE,color='red',span=0.2,method=loess)+
+  geom_smooth(se=TRUE,color='red',span=0.3)+
   geom_hline(lty=2,aes(yintercept=32))
 ```
 
@@ -78,7 +78,7 @@ October in particular has had no average lows below 15F since 2001, before which
 ```{r}
 mean(subset(barrow_monthlyavgs,month==10 & year<=2001)$TMIN<15)
 ggplot(subset(barrow_monthlyavgs,month==10),aes(year,TMIN))+geom_line()+theme_bw()+facet_wrap(~month)+
-  geom_smooth(se=TRUE,color='red',span=0.2,method=loess)+geom_point()+
+  geom_smooth(se=TRUE,color='red',span=0.3)+geom_point()+
   geom_hline(lty=2,aes(yintercept=32))
 ```
 
