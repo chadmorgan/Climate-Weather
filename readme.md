@@ -2,5 +2,5 @@
 
 Analyses of public climate datasets from NOAA
 
-- Barrow, Alaska climate record
-- Barrow + other Arctic weather stations
+- barrow_notebook.ipynb: Barrow, Alaska climate record showing dramatic temperature rise in recent decades
+- Arctic climate record.ipynb: Adding additional arctic weather stations for additional evidence of Arctic temperature rise
