@@ -19,7 +19,11 @@ library(ggmap)
 ```
 
 ```
-## Error in library(ggmap): there is no package called 'ggmap'
+## Google's Terms of Service: https://cloud.google.com/maps-platform/terms/.
+```
+
+```
+## Please cite ggmap if you use it! See citation("ggmap") for details.
 ```
 
 ```r
@@ -66,7 +70,8 @@ barrow_map = get_map(location='alaska',zoom=4)
 ```
 
 ```
-## Error in get_map(location = "alaska", zoom = 4): could not find function "get_map"
+## Error: Google now requires an API key.
+##        See ?register_google for details.
 ```
 
 ```r
@@ -75,7 +80,7 @@ ggmap(barrow_map)+geom_point(data=barrow,aes(x=LONGITUDE,y=LATITUDE),shape=1,col
 ```
 
 ```
-## Error in ggmap(barrow_map): could not find function "ggmap"
+## Error in ggmap(barrow_map): object 'barrow_map' not found
 ```
 
 
