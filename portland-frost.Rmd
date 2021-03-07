@@ -1,0 +1,247 @@
+---
+title: "Portland: frost dates"
+output:
+  github_document
+---
+
+# Study frost dates in Portland OR
+
+For garden planning- for lots of vegetables we should wait until after the last frost of winter to plant. 
+
+According to http://www.multnomahmastergardeners.org/sgp-frostdates, for Portland - Airport:
+
+- Latest Last frost date is April 21
+- Average last frost date is March 28
+- Earliest last frost date is February 29 (Leap day!?)
+
+
+## I will take a look at the climate record for Portland airport data.
+
+Data from NOAA: https://w2.weather.gov/climate/local_data.php?wfo=pqr
+Daily climate record for Portland OR from airport station, 1940-2019
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggridges)
+library(readr)
+library(tidyr)
+library(tibble)
+library(lubridate)
+library(forcats)
+
+theme_set(theme_minimal())
+```
+
+
+## Read data in 
+
+```{r}
+pdx_climate_raw <- read_csv(
+    "Portland_dailyclimatedata.csv", 
+    skip = 6)
+```
+
+```{r}
+colnames(pdx_climate_raw) <- c('year','month','obs_type_abbr',
+                               paste("day",as.character(seq(1:31)),sep='_'),
+                               'avg_or_total')
+```
+
+
+This data is arranged with columns for the day of month and rows for year, month & observation type:
+
+```{r}
+head(pdx_climate_raw)
+```
+
+So, we need to do some wrangling to make this data easier to analyze
+
+
+## initial processing and tidying
+
+This data is formatted with a row per year, month observations for Max Temp, Min Temp, Precipitation, and Snowfall and a column for each day of the month
+
+
+
+Notes before getting into this data:
+- Plan to pivot this to a longer format so we have a row per date observation and separate avg/totals
+- There are missing values from before the first observations in the record indicated by "M"
+- We also have NA values for 2020; we can just drop these rows
+- We have values of "T" and "T/A" for precip. and snow, meaning trace amounts. We will need to do something with those, probably replace with a value less than the smallest observation above zero, which seems to be 0.01
+
+#### Drop 2020: all observations are missing 
+
+```{r}
+pdx_climate_wide0 <- filter(pdx_climate_raw,year<2020)
+```
+
+
+## Daily data processing
+
+### Data reshaping
+
+#### Pivot days columns to longer format
+
+```{r}
+pdx_longer <- pdx_climate_wide0 %>% 
+  select(!avg_or_total) %>%
+  pivot_longer(
+    cols = day_1:day_31,
+    names_to = 'day'
+  ) %>%
+  mutate(
+    day = as.numeric(substr(day,5,6))
+  )
+
+head(pdx_longer)
+```
+
+
+#### drop missing values "M" and "-" 
+M is at the beginning of the record
+- is used for days that don't exist for that month, like Feb 30
+```{r}
+pdx_longer <- pdx_longer %>% 
+  filter(
+    !(value %in% c('M','-'))  # Drop missing records
+  )
+
+```
+
+#### Use better names for obs_type
+
+```{r}
+obs_type_lookup <- tribble(
+  ~obs_type_abbr, ~obs_type,
+  "TX", "max_temp",
+  "TN", "min_temp",
+  "PR", "precip",
+  "SN", "snow"
+)
+```
+
+```{r}
+pdx_longer <- pdx_longer %>%
+  inner_join(obs_type_lookup, by='obs_type_abbr')
+```
+
+
+#### pivot obs_type wider to new fields
+
+
+```{r}
+pdx_daily <- pdx_longer %>%
+  select(year,month,day,obs_type,value) %>%
+  pivot_wider(
+    id_cols = c(year,month,day),
+    names_from = obs_type,
+    values_from = value
+  )
+
+head(pdx_daily)
+```
+#### Add date column and day of year
+
+```{r}
+pdx_daily <- pdx_daily %>%
+  mutate(
+    date = as.Date(paste(year,month,day,sep='-')),
+  ) %>%
+  mutate(
+    dayofyr = as.integer(
+      date - as.Date(paste(year,'01','01',sep='-'))
+    ) + 1
+  )
+```
+
+
+
+# Calculate last frost & first frost dates 
+
+"Frost" refers to a day with min temp <= 32 degrees F
+
+Last frost refers to the last frost date from the previous winter, so calculating it may get a little tricky...
+
+What we could do is make a new column to divide the year in half and get the max date with temp<32 in first half of the year for the last frost and min date with temp<32 in the second half of the year for the first frost
+
+## Last frost of year
+```{r}
+last_frost <- pdx_daily %>%
+  filter(month <= 6) %>%
+  filter(min_temp <= 32) %>%
+  group_by(year) %>%
+  summarize(
+    last_frost_dayofyr = max(dayofyr),
+    last_frost_date = max(date)
+    ) %>%
+  mutate(
+    last_frost_md = format(last_frost_date, format="%b-%d")
+  )
+```
+
+### Plots for last frost day of year
+```{r}
+ggplot(last_frost,aes(last_frost_dayofyr))+geom_histogram(bins=10)
+```
+
+```{r}
+avg_last_frost_doy <- round(mean(last_frost$last_frost_dayofyr))
+
+pdx_daily %>%
+  filter(dayofyr == avg_last_frost_doy) %>%
+  group_by(month,day) %>%
+  summarize(n=n()) %>%
+  arrange(desc(n)) 
+```
+ 
+```{r}
+ggplot(last_frost,aes(year,last_frost_dayofyr))+geom_point(alpha=0.5)+geom_smooth()
+```
+#### distribution by decade
+```{r}
+last_frost <- last_frost %>% 
+  mutate(
+    decade = fct_rev(factor(floor(year / 10)*10))
+  )
+```
+
+```{r plot.length=12}
+ggplot(last_frost,aes(x=last_frost_dayofyr,y=decade,fill=stat(x)))+
+  geom_density_ridges_gradient(scale = 2, rel_min_height = 0.01,bandwidth=7)+
+  scale_fill_viridis_c(name="day of year", option = "C")
+```
+From these plots we can see the last frost of the year has been occurring earlier in the year from the 1940s to the 2010s
+
+```{r}
+last_frost %>% 
+  filter(decade == '2010')
+```
+```{r}
+last_frost %>% 
+  filter(decade %in%  c('2000','2010')) %>%
+  summarize(
+    median_doy = median(last_frost_dayofyr),
+    p90_doy = quantile(last_frost_dayofyr,probs=0.9)
+  )
+```
+
+```{r}
+pdx_daily %>%
+  filter(dayofyr == 77) %>%
+  group_by(month,day) %>%
+  summarize(n=n()) %>%
+  arrange(desc(n)) 
+```
+
+```{r}
+pdx_daily %>%
+  filter(dayofyr == 95) %>%
+  group_by(month,day) %>%
+  summarize(n=n()) %>%
+  arrange(desc(n)) 
+```
+
+
+It looks unlikely, given the observations in the last two decades, that the last frost will occur later than April 5th

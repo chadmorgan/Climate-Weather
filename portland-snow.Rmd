@@ -1,0 +1,251 @@
+---
+title: "Oregon climate data"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Exploring Portland climate data
+
+Data from NOAA: https://w2.weather.gov/climate/local_data.php?wfo=pqr
+
+Daily climate record for Portland OR from airport station, 1940-2019
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+library(tibble)
+library(lubridate)
+
+theme_set(theme_minimal())
+```
+
+
+## Read data in 
+
+```{r}
+pdx_climate_raw <- read_csv(
+    "Portland_dailyclimatedata.csv", 
+    skip = 6)
+```
+
+```{r}
+colnames(pdx_climate_raw)
+```
+
+```{r}
+colnames(pdx_climate_raw) <- c('year','month','obs_type_abbr',
+                               paste("day",as.character(seq(1:31)),sep='_'),
+                               'avg_or_total')
+
+colnames(pdx_climate_raw)
+```
+
+
+```{r}
+str(pdx_climate_raw)
+```
+
+
+## initial processing and tidying
+
+This data is formatted with a row per year, month observations for Max Temp, Min Temp, Precipitation, and Snowfall and a column for each day of the month
+
+```{r}
+head(pdx_climate_raw)
+```
+
+```{r}
+tail(pdx_climate_raw)
+```
+
+
+Notes before getting into this data:
+- Plan to pivot this to a longer format so we have a row per date observation and separate avg/totals
+- There are missing values from before the first observations in the record indicated by "M"
+- We also have NA values for 2020; we can just drop these rows
+- We have values of "T" and "T/A" for precip. and snow, meaning trace amounts. We will need to do something with those, probably replace with a value less than the smallest observation above zero, which seems to be 0.01
+
+#### Drop 2020: all observations are missing 
+
+```{r}
+pdx_climate_wide0 <- filter(pdx_climate_raw,year<2020)
+```
+
+## Daily data processing
+
+### Data reshaping
+
+#### Pivot days columns to longer format
+
+```{r}
+pdx_longer <- pdx_climate_wide0 %>% 
+  select(!avg_or_total) %>%
+  pivot_longer(
+    cols = day_1:day_31,
+    names_to = 'day'
+  ) %>%
+  mutate(
+    day = as.numeric(substr(day,5,6))
+  )
+
+head(pdx_longer)
+```
+
+#### drop missing values "M" and "-" 
+M is at the beginning of the record
+- is used for days that don't exist for that month, like Feb 30
+```{r}
+pdx_longer <- pdx_longer %>% 
+  filter(
+    !(value %in% c('M','-'))  # Drop missing records
+  )
+
+```
+
+#### Use better names for obs_type
+
+```{r}
+obs_type_lookup <- tribble(
+  ~obs_type_abbr, ~obs_type,
+  "TX", "max_temp",
+  "TN", "min_temp",
+  "PR", "precip",
+  "SN", "snow"
+)
+```
+
+```{r}
+pdx_longer <- pdx_longer %>%
+  inner_join(obs_type_lookup, by='obs_type_abbr')
+```
+
+
+#### pivot obs_type wider to new fields
+
+
+```{r}
+pdx_daily <- pdx_longer %>%
+  select(year,month,day,obs_type,value) %>%
+  pivot_wider(
+    id_cols = c(year,month,day),
+    names_from = obs_type,
+    values_from = value
+  )
+
+head(pdx_daily)
+```
+
+
+## Replace "trace amount" with a small value
+
+Take a look at values that are not 0 or Trace amount
+```{r}
+pdx_daily %>% 
+  select(precip,snow) %>%
+  filter(!(precip %in% c('T','T/A','0')) & !(snow %in% c('T','T/A','0'))) %>%
+  mutate(
+    precip = as.numeric(precip),
+    snow = as.numeric(snow)
+  ) %>%
+  summary
+          
+```
+
+Looks like 0.01 is smallest measured value for precipitation, 0.1 for snow
+
+Also- there are a few values in snow with "/A" after a valid number, ex:
+
+```{r}
+pdx_daily %>% filter(year == 1953 & month == 5 & day %in% c(1,8))
+```
+I can't seem to find what that means in the NOAA documentation. We will just remove the "/A" value in snow
+
+```{r}
+pdx_daily <- pdx_daily %>%
+  mutate(
+    snow = sub("/A","",snow)
+  )
+```
+
+
+```{r}
+pdx_daily %>% filter(year == 1953 & month == 5 & day %in% c(1,8))
+```
+
+
+Now to replace Trace amounts
+
+```{r}
+pdx_daily <- pdx_daily %>%
+  mutate(
+    obs_date = make_date(year,month,day),
+    max_temp = as.numeric(max_temp),
+    min_temp = as.numeric(min_temp),
+    precip = as.numeric(ifelse(precip == "T",0.001,precip)),
+    snow = as.numeric(ifelse(snow == "T",0.01,snow))
+  ) %>% 
+  mutate(
+    snow = ifelse(is.na(snow),0,snow),
+    dayofyear = as.integer(obs_date - make_date(year,1,1)) + 1,
+    days_since_autumn = ifelse(month < 10 | (month == 10 & day < 21),
+                               obs_date - make_date(year-1,10,21),
+                               obs_date - make_date(year,10,21))
+  )
+  
+
+head(pdx_daily)
+```
+
+# Data visualization
+
+## When does it snow in Portland?
+
+
+```{r}
+
+ggplot(pdx_daily,aes(days_since_autumn,snow,color=year))+geom_point()
+```
+
+```{r}
+# snow summary by month, day
+snow_day_summary <- pdx_daily %>%
+  
+  filter(month %in% c(11,12,1,2)) %>%
+  group_by(month,day) %>%
+  summarise(
+    obs = n(),
+    snow_record = max(snow),
+    snow_sum = sum(snow),
+    snow_freq = sum(I(snow>0))
+  )
+head(snow_day_summary)
+```
+
+```{r}
+ggplot(snow_day_summary,aes(day,snow_freq/obs))+geom_point()+geom_line()+facet_wrap(~factor(month,labels = c("Nov","Dec","Jan","Feb"),levels=c(11,12,1,2)))
+```
+
+```{r}
+ggplot(snow_day_summary,aes(day,snow_sum))+geom_point()+geom_line()+facet_wrap(~factor(month,labels = c("Nov","Dec","Jan","Feb"),levels=c(11,12,1,2)))
+```
+
+```{r}
+# monthly snow totals trend over time
+pdx_daily %>%
+  filter(month %in% c(11,12,1,2)) %>%
+  group_by(year,month) %>%
+  summarize(snow_total = sum(snow)) %>%
+  ggplot(aes(year,snow_total)) + geom_point() + geom_smooth() +facet_wrap(~factor(month,labels = c("Nov","Dec","Jan","Feb"),levels=c(11,12,1,2)))
+```
+
+```{r}
+# monthly snow freq trend over time
+pdx_daily %>%
+  filter(month %in% c(11,12,1,2)) %>%
+  group_by(year,month) %>%
+  summarize(snow_freq = sum(I(snow>0))) %>%
+  ggplot(aes(year,snow_freq)) + geom_point() + geom_smooth() +facet_wrap(~factor(month,levels=c(10,11,12,1,2,3)))
+```
