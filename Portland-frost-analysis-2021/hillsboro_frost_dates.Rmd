@@ -1,0 +1,180 @@
+---
+title: "Hillsboro - Frost dates"
+output: html_notebook
+---
+
+# Studying frost dates at Hillsboro airport
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+theme_set(theme_minimal())
+
+library(ggmap)
+library(ggridges)
+```
+
+## Show where Hillsboro airport weather station is relative to Portland International and the metro
+```{r}
+station_locations <- data.frame(
+  station_name = c("PDX AIRPORT","HILLSBORO AIRPORT"),
+  latitude = c(45.5958,45.54056),
+  longitude = c(-122.6093,-122.94861),
+  elevation_meters = c(5.8,62.2)
+)
+```
+
+```{r}
+portland_map <- get_map('Portland, OR',source='google',maptype='terrain',zoom=10,color='bw')
+```
+
+```{r}
+ggmap(portland_map)+
+  geom_point(data=station_locations,aes(longitude,latitude),color='red')+
+  geom_text(
+    data=station_locations,
+    aes(longitude,latitude,label=station_name),
+    nudge_y = 0.02,nudge_x = 0.1,size=3,color='red')+
+  theme(legend.position = 'None')
+              
+```
+
+# Import Hillsboro daily weather summaries 
+
+```{r}
+hillsboro_raw <- read.csv(
+  "~/Documents/Climate-Weather/hillsboro_daily_summary.csv", 
+  stringsAsFactors=FALSE)
+```
+
+```{r}
+
+hillsboro_raw$DATE <- as.Date(hillsboro_raw$DATE)
+hillsboro_raw$year <- year(hillsboro_raw$DATE)
+hillsboro_raw$month <- month(hillsboro_raw$DATE)
+hillsboro_raw$day <- day(hillsboro_raw$DATE)
+hillsboro_raw$dayofyr <- as.integer(
+  hillsboro_raw$DATE - 
+    as.Date(paste(hillsboro_raw$year,"01-01",sep='-'))
+)+1
+
+```
+
+
+```{r}
+tail(hillsboro_raw)
+```
+
+```{r}
+ggplot(hillsboro_raw,aes(DATE,TMAX))+geom_point()
+```
+
+```{r}
+
+```
+
+
+```{r}
+ggplot(hillsboro_raw,aes(dayofyr,TMIN,color=TMIN))+
+  geom_point(alpha=0.2)+
+  scale_color_viridis_c(name="min temp F", option = "C")+
+  geom_hline(yintercept = 32,lty=2)+
+  ylab("Day of Year")+xlab("Low Temp F")
+```
+
+```{r}
+ggplot(hillsboro_raw,aes(day,TMIN,color=TMIN))+
+  geom_point(alpha=0.2)+
+  scale_color_viridis_c(name="min temp F", option = "C")+
+  geom_hline(yintercept = 32,lty=2)+
+  xlab("Low Temp F")+
+  facet_wrap(~month(DATE,label=TRUE))
+```
+
+
+```{r}
+  ggplot(hillsboro_raw,aes(TMIN,fill=TMIN))+
+  geom_histogram(alpha=0.6)+
+  scale_color_viridis_c(name="min temp F", option = "C")+
+  geom_vline(xintercept = 32,lty=2)+
+  xlab("Low Temp F")+
+  facet_wrap(~month(DATE,label=TRUE))
+```
+
+
+```{r}
+ggplot(hillsboro_raw,aes(x=TMIN,y=month(DATE,label=TRUE),fill=stat(x)))+
+  geom_density_ridges_gradient(scale = 1.5, rel_min_height = 0.01,bandwidth=1)+
+  scale_fill_viridis_c(name="min temp F", option = "C")+
+  geom_vline(xintercept=32,lty=2)+
+  ylab("Month")+xlab("Low Temp F")
+```
+
+
+```{r}
+dayofyr_tmin_summary <- hillsboro_raw %>%
+  group_by(dayofyr) %>%
+  summarize(
+    month = min(month),
+    day = max(day),
+    n = n(),
+    mean_tmin = mean(TMIN,na.rm=TRUE),
+    median_tmin = median(TMIN,na.rm=TRUE),
+    freezing_count = sum(I(TMIN <= 32),na.rm=TRUE)
+  )
+```
+
+```{r}
+ggplot(dayofyr_tmin_summary,aes(dayofyr,freezing_count/n))+geom_line()
+```
+
+
+
+# Calculate last frost date by year (exclude 2021)
+```{r}
+last_frost <- hillsboro_raw %>%
+  filter(month <= 6) %>%
+  filter(TMIN <= 32) %>%
+  filter(year<2021) %>%
+  group_by(year) %>%
+  summarize(
+    last_frost_dayofyr = max(dayofyr),
+    last_frost_date = max(DATE)
+    ) %>%
+  mutate(
+    last_frost_md = format(last_frost_date, format="%b-%d")
+  )
+```
+
+```{r}
+last_frost
+```
+
+
+```{r}
+median_last_frost_dayofyr <- ceiling(median(last_frost$last_frost_dayofyr))
+```
+
+
+```{r}
+ggplot(last_frost,aes(year,last_frost_dayofyr))+geom_point()+geom_smooth()+
+  geom_hline(yintercept=median_last_frost_dayofyr,lty=2)
+```
+
+```{r}
+hillsboro_raw %>%
+  filter(dayofyr == median_last_frost_dayofyr) %>%
+  group_by(month,day) %>%
+  summarize(n=n()) %>%
+  arrange(desc(n)) 
+```
+
+```{r}
+hillsboro_raw %>%
+  filter(dayofyr == 100) %>%
+  group_by(month,day) %>%
+  summarize(n=n()) %>%
+  arrange(desc(n)) 
+```
+
